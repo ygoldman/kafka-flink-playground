@@ -47,6 +47,19 @@ export DOCKER_HOST_IP=127.0.0.1
  docker-compose -f full-stack.yml up
  docker-compose -f full-stack.yml down
  ```
+ 
+# Run a simple producer and consumer test
+```
+./kafka-publisher-consumer-test.sh full-stack.yml
+```
+
+# What this gets you
+![Running Services](./images/Screen%20Shot%202018-11-10%20at%204.41.16%20PM.png?raw=true "docker ps")
+![Kafka Manager](./images/Screen%20Shot%202018-11-10%20at%204.42.59%20PM.png?raw=true "Kafka Manager")
+![Kafka Connect](./images/Screen%20Shot%202018-11-10%20at%204.45.46%20PM.png?raw=true "Kafka Connect")
+![Schema Registry](./images/Screen%20Shot%202018-11-10%20at%204.44.11%20PM.png?raw=true "Schema Registry")
+![Zoo Navigator](./images/Screen%20Shot%202018-11-10%20at%204.45.16%20PM.png?raw=true "Zoo Navigator")
+![Flink Manager](./images/Screen%20Shot%202018-11-10%20at%204.45.26%20PM.png?raw=true "Flink Manager")
 
 # FAQ
 
