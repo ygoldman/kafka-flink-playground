@@ -1,0 +1,46 @@
+version: '2.1'
+
+services:
+  graphite:
+    image: sitespeedio/graphite
+    ports:
+      - "2003:2003"
+      - "2004:2004"
+      - "8080:80"
+    volumes:
+      - ./volumes/full-stack/graphite/storage/whisper:/opt/graphite/storage/whisper
+
+  grafana:
+    image: grafana/grafana
+    volumes:
+      - ./volumes/full-stack/grafana:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    links:
+      - graphite
+
+  jobmanager:
+    image: ${FLINK_DOCKER_IMAGE_NAME:-flink}
+    expose:
+      - "6123"
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+    links:
+      - graphite
+
+  taskmanager:
+    image: ${FLINK_DOCKER_IMAGE_NAME:-flink}
+    expose:
+      - "6121"
+      - "6122"
+    depends_on:
+      - jobmanager
+    command: taskmanager
+    links:
+      - "jobmanager:jobmanager"
+      - graphite
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager

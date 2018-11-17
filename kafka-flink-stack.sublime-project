@@ -1,0 +1,15 @@
+{
+	"folders":
+	[
+		{
+			"path": "."
+		},
+		{
+			"path": "/Users/yuriy/src/streaming-with-flink-scala"
+		}
+	],
+	"javatar":
+	{
+		"source_folder": "/Users/yuriy/src/kafka-flink-stack/src"
+	}
+}

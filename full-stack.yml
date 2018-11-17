@@ -172,6 +172,8 @@ services:
     command: jobmanager
     environment:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
+    links:
+      - graphite
 
   taskmanager:
     image: ${FLINK_DOCKER_IMAGE_NAME:-flink}
@@ -183,5 +185,6 @@ services:
     command: taskmanager
     links:
       - "jobmanager:jobmanager"
+      - graphite
     environment:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
