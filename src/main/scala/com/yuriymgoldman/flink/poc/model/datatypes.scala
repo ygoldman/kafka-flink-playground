@@ -13,6 +13,10 @@
  */
 package com.yuriymgoldman.flink.poc.model
 
+import org.apache.flink.api.common.ExecutionConfig
+import org.apache.flink.api.common.typeinfo.{TypeHint, TypeInformation}
+import org.apache.flink.streaming.util.serialization.{SerializationSchema, TypeInformationSerializationSchema}
+
 sealed abstract trait CreatedAtEventTimeable { def created_at: Long }
 case class Product(product_id: String, name: String, created_at: Long) extends CreatedAtEventTimeable
 case class ProductPrice(product_id: String, amount: Double, created_at: Long) extends CreatedAtEventTimeable
@@ -21,3 +25,10 @@ case class TaxRate(country_code: String, amount: Double, created_at: Long) exten
 case class PurchaseRequest(product_id: String, country_code: String, created_at: Long) extends CreatedAtEventTimeable
 case class PurchaseOrder(product_id: String, product_name: String, country_code: String, tax_rate: Double, amount_before_tax: Double, amount_after_tax: Double, created_at: Long) extends CreatedAtEventTimeable
 case class SalesLedger(product_id: String, country_code: String, total_amount: Double, created_at: Long) extends CreatedAtEventTimeable
+
+object ProductWithLatestPrice {
+  def schema(implicit config: ExecutionConfig): SerializationSchema[ProductWithLatestPrice] = {
+    val info = TypeInformation.of(new TypeHint[ProductWithLatestPrice](){})
+    new TypeInformationSerializationSchema[ProductWithLatestPrice](info, config)
+  }
+}

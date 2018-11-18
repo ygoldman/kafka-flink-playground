@@ -10,7 +10,10 @@ services:
     environment:
         ZOO_MY_ID: 1
         ZOO_PORT: 2181
+        ZOOKEEPER_CLIENT_PORT: 2181
+        ZOOKEEPER_TICK_TIME: 2000
         ZOO_SERVERS: server.1=zoo1:2888:3888
+        KAFKA_LOG4J_LOGGERS: "ERROR"
     volumes:
       - ./volumes/full-stack/zoo1/data:/data
       - ./volumes/full-stack/zoo1/datalog:/datalog
@@ -21,69 +24,48 @@ services:
     ports:
       - "9092:9092"
     environment:
-      KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka1:19092,LISTENER_DOCKER_EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_INTERNAL
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:19092,PLAINTEXT_HOST://${DOCKER_HOST_IP:-127.0.0.1}:9092
       KAFKA_ZOOKEEPER_CONNECT: "zoo1:2181"
       KAFKA_BROKER_ID: 1
-      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=ERROR,kafka.producer.async.DefaultEventHandler=ERROR,state.change.logger=ERROR"
+      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: "kafka1:19092"
+      CONFLUENT_METRICS_REPORTER_ZOOKEEPER_CONNECT: "zoo1:2181"
+      CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
+      CONFLUENT_METRICS_ENABLE: 'true'
+      CONFLUENT_SUPPORT_CUSTOMER_ID: 'anonymous'
     volumes:
       - ./volumes/full-stack/kafka1/data:/var/lib/kafka/data
     depends_on:
       - zoo1
 
-  kafka-schema-registry:
-    image: confluentinc/cp-schema-registry:5.0.1
-    hostname: kafka-schema-registry
+  kafka-control-center:
+    image: confluentinc/cp-enterprise-control-center:5.0.1
+    restart: unless-stopped
+    hostname: kafka-control-center
     ports:
-      - "8091:8081"
+      - "9021:9021"
     environment:
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka1:19092
-      SCHEMA_REGISTRY_HOST_NAME: kafka-schema-registry
-      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8091
-    depends_on:
-      - zoo1
-      - kafka1
-
-  schema-registry-ui:
-    image: landoop/schema-registry-ui:0.9.5
-    hostname: kafka-schema-registry-ui
-    ports:
-      - "8001:8000"
-    environment:
-      SCHEMAREGISTRY_URL: http://kafka-schema-registry:8091/
-      PROXY: "true"
-    depends_on:
-      - kafka-schema-registry
-
-  kafka-rest-proxy:
-    image: confluentinc/cp-kafka-rest:5.0.0
-    hostname: kafka-rest-proxy
-    ports:
-      - "8082:8082"
-    environment:
-      # KAFKA_REST_ZOOKEEPER_CONNECT: zoo1:2181
-      KAFKA_REST_LISTENERS: http://0.0.0.0:8082/
-      KAFKA_REST_SCHEMA_REGISTRY_URL: http://kafka-schema-registry:8091/
-      KAFKA_REST_HOST_NAME: kafka-rest-proxy
-      KAFKA_REST_BOOTSTRAP_SERVERS: PLAINTEXT://kafka1:19092
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: "kafka1:19092"
+      CONTROL_CENTER_ZOOKEEPER_CONNECT: "zoo1:2181"
+      CONTROL_CENTER_CONNECT_CLUSTER: "kafka-connect:8083"
+      CONTROL_CENTER_REPLICATION_FACTOR: 1
+      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+      CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
+      CONFLUENT_METRICS_TOPIC_REPLICATION: 1
+      PORT: 9021
+      CONTROL_CENTER_LOG4J_ROOT_LOGLEVEL: 'ERROR'
+      CONTROL_CENTER_TOOLS_LOG4J_LOGLEVEL: 'ERROR'
+    volumes:
+      - ./volumes/full-stack/kafka-control-center/data:/var/lib/confluent-control-center
     depends_on:
       - zoo1
       - kafka1
       - kafka-schema-registry
-
-  kafka-manager:
-    image: sheepkiller/kafka-manager:latest
-    ports:
-      - "9000:9000"
-    links:
-      - zoo1
-      - kafka1
-    environment:
-      ZK_HOSTS: zoo1:2181
-      APPLICATION_SECRET: letmein
-      KM_ARGS: -Djava.net.preferIPv4Stack=true
+      - kafka-connect
 
   kafka-connect:
     image: confluentinc/cp-kafka-connect:5.0.0
@@ -106,44 +88,42 @@ services:
       CONNECT_REST_ADVERTISED_HOST_NAME: "kafka-connect"
       CONNECT_LOG4J_ROOT_LOGLEVEL: "INFO"
       CONNECT_LOG4J_LOGGERS: "org.apache.kafka.connect.runtime.rest=WARN,org.reflections=ERROR"
-      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
-      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
-      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
     depends_on:
       - zoo1
       - kafka1
       - kafka-schema-registry
       - kafka-rest-proxy
 
-  kafka-connect-ui:
-    image: landoop/kafka-connect-ui:0.9.4
-    hostname: kafka-connect-ui
+  kafka-schema-registry:
+    image: confluentinc/cp-schema-registry:5.0.1
+    hostname: kafka-schema-registry
     ports:
-      - "8003:8000"
+      - "8091:8081"
     environment:
-      CONNECT_URL: "http://kafka-connect:8083/"
-      PROXY: "true"
-    depends_on:
-      - kafka-connect
-
-  zoonavigator-web:
-    image: elkozmon/zoonavigator-web:0.4.0
-    ports:
-     - "8004:8000"
-    environment:
-      API_HOST: "zoonavigator-api"
-      API_PORT: 8000
-    links:
-     - zoonavigator-api
-    depends_on:
-     - zoonavigator-api
-
-  zoonavigator-api:
-    image: elkozmon/zoonavigator-api:0.4.0
-    environment:
-      SERVER_HTTP_PORT: 8000
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: "zoo1:2181"
+      SCHEMA_REGISTRY_HOST_NAME: kafka-schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8091
     depends_on:
       - zoo1
+      - kafka1
+
+  kafka-rest-proxy:
+    image: confluentinc/cp-kafka-rest:5.0.1
+    hostname: kafka-rest-proxy
+    ports:
+      - "8082:8082"
+    environment:
+      KAFKA_REST_ZOOKEEPER_CONNECT: "zoo1:2181"
+      KAFKA_REST_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 30000
+      KAFKA_REST_LISTENERS: http://0.0.0.0:8082/
+      KAFKA_REST_HOST_NAME: kafka-rest-proxy
+      KAFKA_REST_BOOTSTRAP_SERVERS: PLAINTEXT://kafka1:19092
+    depends_on:
+      - zoo1
+      - kafka1
 
   graphite:
     image: sitespeedio/graphite

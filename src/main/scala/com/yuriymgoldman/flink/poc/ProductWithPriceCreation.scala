@@ -21,6 +21,7 @@ import org.apache.flink.api.common.functions.MapFunction
 import org.apache.flink.streaming.api.functions.co.CoProcessFunction
 import org.apache.flink.streaming.api.scala._
 import org.apache.flink.api.common.state.{MapState, MapStateDescriptor, ValueState, ValueStateDescriptor}
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer010
 import org.apache.flink.util.Collector
 
 /**
@@ -43,6 +44,16 @@ object ProductWithPriceCreation {
     // configure watermark interval
     env.getConfig.setAutoWatermarkInterval(1000L)
 
+    val kafka = new FlinkKafkaProducer010[ProductWithLatestPrice](
+      "kafka1:19092",
+      "product_with_price",
+      ProductWithLatestPrice.schema(env.getConfig) //TODO: replace with Avro Schema from Registry
+    )
+
+    // versions 0.10+ allow attaching the records' event timestamp when writing them to Kafka;
+    // this method is not available for earlier Kafka versions
+    kafka.setWriteTimestampToKafka(true)
+
     // ingest streams
     val products: DataStream[Product] = env
       .addSource(new ProductSource)
@@ -59,8 +70,10 @@ object ProductWithPriceCreation {
     val pricedProducts: DataStream[ProductWithLatestPrice] = products
       .connect(productPrices)
       .process(new EnrichmentFunction)
+      .map(new SinkToGraphite)
 
-    pricedProducts.map(new SinkToGraphite).print()
+    pricedProducts.addSink(kafka)
+    // pricedProducts.print()
 
     // execute application
     env.execute("ProductWithLatestPriceCreation - A multi-stream enrichment example")
@@ -118,6 +131,7 @@ object ProductWithPriceCreation {
     lazy val client = new SimpleGraphiteClient("graphite", 2003);
 
     override def map(el: ProductWithLatestPrice): ProductWithLatestPrice = {
+      println("> " + el)
       client.sendMetric("flink.product_with_latest_price." + el.name, el.amount)
       return el
     }
